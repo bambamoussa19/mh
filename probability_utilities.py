@@ -1,3 +1,11 @@
+"""
+Probability Utilities - Enhanced with xG Integration
+
+Utilities for managing and adjusting probabilities with full audit trails.
+Enhanced to support xG-based probability calculations.
+"""
+
+
 class ProbabilityManager:
     
     @staticmethod
@@ -38,6 +46,68 @@ class ProbabilityManager:
         }
         
         return renormalized, drift_magnitude, audit_log
+    
+    @staticmethod
+    def xg_to_outcome_probabilities(xg_home, xg_away):
+        """
+        Convert xG values to match outcome probabilities using Skellam distribution.
+        
+        :param xg_home: Home team expected goals
+        :param xg_away: Away team expected goals
+        :return: Dict with home_win, draw, away_win probabilities
+        """
+        from scipy.stats import skellam
+        
+        lambda_home = xg_home * 0.95  # Slight calibration adjustment
+        lambda_away = xg_away * 0.95
+        
+        # Calculate outcome probabilities
+        home_win = sum(skellam.pmf(i, lambda_home, lambda_away) for i in range(1, 8))
+        draw = skellam.pmf(0, lambda_home, lambda_away)
+        away_win = sum(skellam.pmf(i, lambda_home, lambda_away) for i in range(-7, 0))
+        
+        # Normalize
+        total = home_win + draw + away_win
+        if total > 0:
+            home_win /= total
+            draw /= total
+            away_win /= total
+        
+        return {
+            'home_win': round(home_win, 4),
+            'draw': round(draw, 4),
+            'away_win': round(away_win, 4)
+        }
+    
+    @staticmethod
+    def blend_xg_with_model(model_probs, xg_probs, xg_weight=0.4):
+        """
+        Blend model-based probabilities with xG-based probabilities.
+        
+        :param model_probs: Probabilities from prediction model
+        :param xg_probs: Probabilities from xG data
+        :param xg_weight: Weight for xG (0-1), default 0.4
+        :return: Blended probabilities
+        """
+        if not (0 <= xg_weight <= 1):
+            raise ValueError("xg_weight must be between 0 and 1")
+        
+        model_weight = 1 - xg_weight
+        
+        blended = {}
+        for outcome in model_probs.keys():
+            if outcome in xg_probs:
+                blended[outcome] = (model_probs[outcome] * model_weight + 
+                                   xg_probs[outcome] * xg_weight)
+            else:
+                blended[outcome] = model_probs[outcome] * model_weight
+        
+        # Normalize
+        total = sum(blended.values())
+        if total > 0:
+            blended = {k: v / total for k, v in blended.items()}
+        
+        return {k: round(v, 4) for k, v in blended.items()}
     
     @staticmethod
     def apply_sequence_of_adjustments(base_probs, adjustments_list, descriptions_list):
