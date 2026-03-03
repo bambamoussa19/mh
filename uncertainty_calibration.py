@@ -1,24 +1,76 @@
-# Uncertainty Calibration
+import math
 
-This script contains functionality for prediction uncertainty quantification and upset detection.
 
-## Functions
+def predictive_uncertainty(probabilities):
+    """
+    Quantify predictive uncertainty using entropy.
 
-1. **Predictive Uncertainty Quantification**: This function evaluates the uncertainty of predictions made by machine learning models.
-2. **Upset Detection**: This function identifies anomalies and deviations in the predictions that may indicate systemic problems.
+    Parameters:
+    probabilities (dict): A dict mapping outcome labels to their predicted probabilities.
+                          Values should sum to 1.0.
 
-## Usage
+    Returns:
+    float: Entropy-based uncertainty score (higher = more uncertain).
+    """
+    entropy = 0.0
+    for p in probabilities.values():
+        if p > 0:
+            entropy -= p * math.log2(p)
+    return entropy
 
-```python
-# Example usage of the functions
 
-import uncertainty_calibration
+def upset_detection(predicted_probs, actual_outcome, upset_threshold=0.25):
+    """
+    Detect whether an actual match outcome constitutes an upset.
 
-# Assume `model` is a trained machine learning model and `data` is the input data.
+    An upset is defined as the actual outcome having a predicted probability
+    below ``upset_threshold``.
 
-# Quantify predictive uncertainty
-results = uncertainty_calibration.predictive_uncertainty(model, data)
+    Parameters:
+    predicted_probs (dict): Predicted probabilities for each outcome label.
+    actual_outcome (str): The outcome that actually occurred.
+    upset_threshold (float): Probability threshold below which a result is an upset.
 
-# Detect upsets in predictions
-upsets = uncertainty_calibration.upset_detection(results)
-```
+    Returns:
+    bool: True if the result is classified as an upset, False otherwise.
+    """
+    actual_prob = predicted_probs.get(actual_outcome, 0.0)
+    return actual_prob < upset_threshold
+
+
+def calibration_error(predicted_probs_list, actual_outcomes, n_bins=10):
+    """
+    Compute the Expected Calibration Error (ECE) across a set of predictions.
+
+    Parameters:
+    predicted_probs_list (list of float): Predicted probability for the positive/chosen outcome.
+    actual_outcomes (list of int): Binary ground truth labels (1 = correct, 0 = incorrect).
+    n_bins (int): Number of equally-spaced probability bins.
+
+    Returns:
+    float: Expected Calibration Error.
+    """
+    bin_size = 1.0 / n_bins
+    ece = 0.0
+    n = len(predicted_probs_list)
+
+    for b in range(n_bins):
+        lower = b * bin_size
+        upper = lower + bin_size
+        indices = [i for i, p in enumerate(predicted_probs_list) if lower <= p < upper]
+        if not indices:
+            continue
+        avg_confidence = sum(predicted_probs_list[i] for i in indices) / len(indices)
+        avg_accuracy = sum(actual_outcomes[i] for i in indices) / len(indices)
+        ece += (len(indices) / n) * abs(avg_confidence - avg_accuracy)
+
+    return ece
+
+
+if __name__ == '__main__':
+    probs = {'home_win': 0.55, 'draw': 0.25, 'away_win': 0.20}
+    uncertainty = predictive_uncertainty(probs)
+    print(f"Predictive uncertainty (entropy): {uncertainty:.4f}")
+
+    is_upset = upset_detection(probs, actual_outcome='away_win')
+    print(f"Upset detected: {is_upset}")
