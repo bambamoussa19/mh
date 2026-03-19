@@ -17,8 +17,16 @@ class WeakAttackingDetector:
             return False  # No attack detected
 
     def is_attack(self, data):
-        # Logic to determine if the data represents an attack
-        pass # Replace with actual logic
+        """
+        Determine if the data represents an attacking pattern.
+        :param data: dict with keys 'shots' (int), 'shots_on_target' (int),
+                     and 'xg' (float, expected goals).
+        :return: True if an attacking pattern is detected, False otherwise.
+        """
+        shots = data.get('shots', 0) if isinstance(data, dict) else 0
+        shots_on_target = data.get('shots_on_target', 0) if isinstance(data, dict) else 0
+        xg = data.get('xg', 0.0) if isinstance(data, dict) else 0.0
+        return shots >= 3 or shots_on_target >= 1 or xg >= 0.3
 
     def adjust_btts(self):
         # Smart logic for BTTS adjustment
